@@ -39,4 +39,20 @@ public class Face {
         this.yCoord = y;
     }
 
+    public void setCoords(int[] coords) {
+        this.xCoord = coords[0];
+        this.yCoord = coords[1];
+    }
+
+    public static String generateMoveEnemy () {
+        ArrayList<String> moves = new ArrayList<>();
+        moves.add("Left");
+        moves.add("Right");
+        moves.add("Up");
+        moves.add("Down");
+
+        int randomIndex = (int) (Math.random() * moves.size());
+        return moves.get(randomIndex);
+    }
+
 }

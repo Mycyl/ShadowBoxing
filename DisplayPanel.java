@@ -3,10 +3,23 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+
 import java.io.File;
 import java.io.IOException;
+import java.util.Map;
+import java.util.HashMap;
+
+enum TurnState {
+    PLAYER_CONTROLS_HANDS,
+    PLAYER_CONTROLS_FACE
+}
 
 public class DisplayPanel extends JPanel implements ActionListener, KeyListener {
+
+    private Map<String, int[]> directionMapToCoordinates = new HashMap<String, int[]>();
 
     private BufferedImage background;
     private BufferedImage crosshair;
@@ -34,6 +47,12 @@ public class DisplayPanel extends JPanel implements ActionListener, KeyListener 
 
     private boolean inCooldown = false;
     private Timer cooldownTimer;
+    private int playerStreak;
+    private int enemyStreak;
+
+    private boolean playerMove = true;
+
+    
 
     public DisplayPanel() {
         try {
@@ -72,20 +91,37 @@ public class DisplayPanel extends JPanel implements ActionListener, KeyListener 
         enemyRight.setImage(enemyRightRestImage);
         enemyLeft.setImage(enemyLeftRestImage);
 
-        face = new Face(960 - faceImage.getWidth() / 2, 540 - faceImage.getHeight());
+        face = new Face(960 - faceImage.getWidth() / 2, 540 - faceImage.getHeight() / 2);
+        playerStreak = 0;
+        enemyStreak = 0;
 
+        directionMapToCoordinates.put("Left", new int[]{750 - faceImage.getWidth() / 2, 540 - faceImage.getHeight() / 2});
+        directionMapToCoordinates.put("Right", new int[]{1170 - faceImage.getWidth() / 2, 540 - faceImage.getHeight() / 2});
+        directionMapToCoordinates.put("Up", new int[]{960 - faceImage.getWidth() / 2, 360 - faceImage.getHeight() / 2});
+        directionMapToCoordinates.put("Down", new int[]{960 - faceImage.getWidth() / 2, 720 - faceImage.getHeight() / 2});
     }
 
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
         g.drawImage(background, 0, 0, null);
-        g.drawImage(crosshair, 960 - crosshair.getWidth() / 2, 540 - crosshair.getHeight() / 2, null);
-        g.drawImage(faceImage, face.getXCoord(), face.getYCoord(), null);
-        g.drawImage(enemyLeft.getRestImage(), enemyLeft.getXCoord(), enemyLeft.getYCoord(), null);
-        g.drawImage(enemyRight.getRestImage(), enemyRight.getXCoord(), enemyRight.getYCoord(), null);
-        g.drawImage(playerRight.getRestImage(), playerRight.getXCoord(), playerRight.getYCoord(), null);
-        g.drawImage(playerLeft.getRestImage(), playerLeft.getXCoord(), playerLeft.getYCoord(), null);
+        if (playerStreak != 3 && enemyStreak != 3) {
+            g.drawImage(crosshair, 960 - crosshair.getWidth() / 2, 540 - crosshair.getHeight() / 2, null);
+            g.drawImage(faceImage, face.getXCoord(), face.getYCoord(), null);
+            g.drawImage(enemyLeft.getRestImage(), enemyLeft.getXCoord(), enemyLeft.getYCoord(), null);
+            g.drawImage(enemyRight.getRestImage(), enemyRight.getXCoord(), enemyRight.getYCoord(), null);
+            g.drawImage(playerRight.getRestImage(), playerRight.getXCoord(), playerRight.getYCoord(), null);
+            g.drawImage(playerLeft.getRestImage(), playerLeft.getXCoord(), playerLeft.getYCoord(), null);
+        }
+        if (playerStreak == 3) {
+            g.setColor(Color.GREEN);
+            g.setFont(new Font("Arial", Font.BOLD, 50));
+            g.drawString("You Win!", 960 - 100, 540);
+        } else if (enemyStreak == 3) {
+            g.setColor(Color.RED);
+            g.setFont(new Font("Arial", Font.BOLD, 50));
+            g.drawString("You Lose!", 960 - 100, 540);
+        }
     }
 
     @Override
@@ -103,32 +139,192 @@ public class DisplayPanel extends JPanel implements ActionListener, KeyListener 
         int key = e.getKeyCode();
 
         if (key == 65) { // A
-            playerRight.setXCoord(1920 - playerRightLeftImage.getWidth());
-            playerRight.setYCoord(1080 - playerRightLeftImage.getHeight());
-            playerRight.setImage(playerRightLeftImage);
-            startCooldown(key);
+            if (playerMove) {
+                String enemyMove = Face.generateMoveEnemy();
+                playerRight.setXCoord(1920 - playerRightLeftImage.getWidth());
+                playerRight.setYCoord(1080 - playerRightLeftImage.getHeight());
+                playerRight.setImage(playerRightLeftImage);
+                face.setCoords(directionMapToCoordinates.get(enemyMove));
+                startCooldown(key);
+                if (enemyMove.equals("Left")) {
+                    playerStreak++;
+                    playSound();
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                } else {
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                }
+            } else { // Moving Face
+                face.setCoords(directionMapToCoordinates.get("Left"));
+                String enemyMove = Face.generateMoveEnemy();
+                processEnemyMove(enemyMove);
+                startCooldown(key);
+                if (enemyMove.equals("Left")) {
+                    enemyStreak++;
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                } else {
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                }
+
+                
+            }
         }
 
         if (key == 68) { // D
-            playerLeft.setYCoord(1080 - playerLeftRightImage.getHeight());
-            playerLeft.setImage(playerLeftRightImage);
-            startCooldown(key);
+            if (playerMove) {
+                String enemyMove = Face.generateMoveEnemy();
+                playerLeft.setYCoord(1080 - playerLeftRightImage.getHeight());
+                playerLeft.setImage(playerLeftRightImage);
+                face.setCoords(directionMapToCoordinates.get(enemyMove));
+                startCooldown(key);
+                if (enemyMove.equals("Right")) {
+                    playerStreak++;
+                    playSound();
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                } else {
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                }
+            } else { // Moving Face
+                face.setCoords(directionMapToCoordinates.get("Right"));
+                String enemyMove = Face.generateMoveEnemy();
+                processEnemyMove(enemyMove);
+                startCooldown(key);
+                if (enemyMove.equals("Right")) {
+                    enemyStreak++;
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                } else {
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                }
+            }
+
         }
 
         if (key == 87) { // W
-            playerRight.setXCoord(1920 - playerRightUpImage.getWidth());
-            playerRight.setYCoord(1080 - playerRightUpImage.getHeight());
-            playerRight.setImage(playerRightUpImage);
-            startCooldown(key);
+            if (playerMove) {
+                String enemyMove = Face.generateMoveEnemy();
+                playerRight.setXCoord(1920 - playerRightUpImage.getWidth());
+                playerRight.setYCoord(1080 - playerRightUpImage.getHeight());
+                playerRight.setImage(playerRightUpImage);
+                face.setCoords(directionMapToCoordinates.get(enemyMove));
+                startCooldown(key);
+                if (enemyMove.equals("Up")) {
+                    playerStreak++;
+                    playSound();
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                } else {
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                }
+            } else { // Moving Face
+                face.setCoords(directionMapToCoordinates.get("Up"));
+                String enemyMove = Face.generateMoveEnemy();
+                processEnemyMove(enemyMove);
+                startCooldown(key);
+                if (enemyMove.equals("Up")) {
+                    enemyStreak++;
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                } else {
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                }
+            }
+
         }
 
         if (key == 83) { // S
-            playerLeft.setYCoord(1080 - playerLeftDownImage.getHeight());
-            playerLeft.setImage(playerLeftDownImage);
-            startCooldown(key);
+            if (playerMove) {
+                String enemyMove = Face.generateMoveEnemy();
+                playerLeft.setYCoord(1080 - playerLeftDownImage.getHeight());
+                playerLeft.setImage(playerLeftDownImage);
+                face.setCoords(directionMapToCoordinates.get(enemyMove));
+                startCooldown(key);
+                if (enemyMove.equals("Down")) {
+                    playerStreak++;
+                    playSound();
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                } else {
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                }
+            } else { // Moving Face
+                face.setCoords(directionMapToCoordinates.get("Down"));
+                String enemyMove = Face.generateMoveEnemy();
+                processEnemyMove(enemyMove);
+                startCooldown(key);
+                if (enemyMove.equals("Down")) {
+                    enemyStreak++;
+                    playerStreak = 0;
+                    playerMove = false;
+                    System.out.println("Lost");
+                } else {
+                    enemyStreak = 0;
+                    playerMove = true;
+                    System.out.println("Won");
+                }
+            }
+
         }
 
         repaint();
+    }
+
+    public void playSound() {
+        String soundFilePath;
+        if (playerStreak == 1) {
+            soundFilePath = "Assets\\SoundFX\\1.wav";
+        } else if (playerStreak == 2) {
+            soundFilePath = "Assets\\SoundFX\\2.wav";
+        } else {
+            soundFilePath = "Assets\\SoundFX\\3.wav";
+        }
+        try {
+
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(new File(soundFilePath));
+            Clip clip = AudioSystem.getClip();
+            clip.open(audioStream);
+            clip.start();
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+    public void processEnemyMove (String enemyMove) {
+        if (enemyMove.equals("Right")) {
+            enemyRight.setImage(enemyRightLeftImage);
+
+        } else if (enemyMove.equals("Left")) {
+            enemyLeft.setImage(enemyLeftRightImage);
+
+        } else if (enemyMove.equals("Up")) {
+            enemyRight.setImage(enemyRightUpImage);
+
+        } else if (enemyMove.equals("Down")) {
+            enemyLeft.setImage(enemyLeftDownImage);
+        }
     }
 
     @Override
@@ -153,6 +349,11 @@ public class DisplayPanel extends JPanel implements ActionListener, KeyListener 
                     playerLeft.setYCoord(1080 - playerLeftRestImage.getHeight());
                     playerLeft.setImage(playerLeftRestImage);
                 }
+
+                enemyRight.setImage(enemyRightRestImage);
+                enemyLeft.setImage(enemyLeftRestImage);
+                face.setXCoord(960 - faceImage.getWidth() / 2);
+                face.setYCoord(540 - faceImage.getHeight() / 2);
 
                 inCooldown = false;
                 cooldownTimer.stop();
